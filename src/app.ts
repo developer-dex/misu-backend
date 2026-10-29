@@ -7,6 +7,7 @@ import express from 'express';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import { config } from './config.js';
+import { connectDb } from './db.js';
 import { requireAuth } from './middleware/auth.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 import { authRouter } from './routes/auth.js';
@@ -40,6 +41,10 @@ export function createApp() {
   if (config.clientOrigins.length) app.use('/api', cors({ origin: config.clientOrigins }));
   app.use(express.json({ limit: '50kb' }));
 
+  app.use('/api', async (_req, _res, next) => {
+    await connectDb();
+    next();
+  });
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, db: mongoose.connection.readyState === 1 });
   });
@@ -64,3 +69,6 @@ export function createApp() {
   app.use(errorHandler);
   return app;
 }
+
+// Vercel runs the default export of this file as a serverless function
+export default createApp();

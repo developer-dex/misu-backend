@@ -1,14 +1,12 @@
 import mongoose from 'mongoose';
 import { authEnabled, config } from './config.js';
-import { createApp } from './app.js';
-import { seedDefaults } from './seed.js';
+import app from './app.js';
+import { connectDb } from './db.js';
 
 async function main() {
-  mongoose.set('strictQuery', true);
-  await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10_000 });
-  await seedDefaults();
+  await connectDb();
 
-  const server = createApp().listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`MISU API listening on http://localhost:${config.port}`);
     if (!authEnabled) console.warn('APP_PASSCODE is not set: anyone who can reach this server can use the app.');
   });
