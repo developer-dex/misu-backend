@@ -1,17 +1,6 @@
 import { Schema, model } from 'mongoose';
 
-/**
- * A stall day: when the shift clock ran and how many of each flavour were made.
- * A day can hold several shifts (stop for a break, start again).
- */
-const shiftSchema = new Schema(
-  {
-    start: { type: Date, required: true },
-    end: { type: Date, default: null },
-  },
-  { _id: false },
-);
-
+/** A stall day: how many of each flavour were made. Clock runs are in StallSession. */
 const preparedSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
@@ -23,12 +12,9 @@ const preparedSchema = new Schema(
 const dayLogSchema = new Schema(
   {
     day: { type: String, required: true, unique: true },
-    shifts: { type: [shiftSchema], default: [] },
     prepared: { type: [preparedSchema], default: [] },
   },
   { timestamps: true },
 );
-
-dayLogSchema.index({ 'shifts.end': 1 });
 
 export const DayLog = model('DayLog', dayLogSchema);

@@ -1,30 +1,37 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { authEnabled } from '../config.js';
-import { checkPasscode, issueToken, loginLimiter, recordFailedLogin, requireAuth } from '../middleware/auth.js';
+import { clearFailedLogins, issueToken, loginLimiter, recordFailedLogin, requireAuth } from '../middleware/auth.js';
+import { User } from '../models/User.js';
 import { HttpError, parse } from '../utils/http.js';
+import { burnPasswordCheck, verifyPassword } from '../utils/password.js';
 
 export const authRouter = Router();
 
-/** Tells the client whether it has to show the login screen. */
-authRouter.get('/status', (_req, res) => {
-  res.json({ authRequired: authEnabled });
+const credentials = z.object({
+  username: z.string().trim().toLowerCase().min(1, 'Enter your username').max(40),
+  password: z.string().min(1, 'Enter your password').max(200),
 });
 
-authRouter.post('/login', loginLimiter, (req, res) => {
-  if (!authEnabled) {
-    res.json({ token: null, expiresAt: null });
-    return;
-  }
-  const { passcode } = parse(z.object({ passcode: z.string().max(200) }), req.body);
-  if (!checkPasscode(passcode)) {
+authRouter.post('/login', loginLimiter, async (req, res) => {
+  const { username, password } = parse(credentials, req.body);
+  const user = await User.findOne({ username });
+
+  // Same message and timing whether the username or the password is wrong
+  const ok = user ? await verifyPassword(password, user.passwordHash) : (await burnPasswordCheck(password), false);
+  if (!user || !ok) {
     recordFailedLogin(req);
-    throw new HttpError(401, 'Wrong passcode');
+    throw new HttpError(401, 'Wrong username or password');
   }
-  res.json(issueToken());
+
+  clearFailedLogins(req);
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  const { token, expiresAt } = issueToken({ id: String(user._id), tokenVersion: user.tokenVersion });
+  res.json({ token, expiresAt, user: { username: user.username } });
 });
 
-/** Lets the client check a stored token is still good. */
-authRouter.get('/me', requireAuth, (_req, res) => {
-  res.json({ ok: true });
+/** Lets the client check a stored token is still good, and who it belongs to. */
+authRouter.get('/me', requireAuth, (req, res) => {
+  res.json({ user: { username: req.user!.username } });
 });

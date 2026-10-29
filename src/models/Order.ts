@@ -26,6 +26,8 @@ const orderSchema = new Schema(
     total: { type: Number, required: true, min: 0 },
     payment: { type: String, enum: PAYMENT_METHODS, required: true },
     note: { type: String, trim: true, maxlength: 200 },
+    // The clock session running when the sale was made; null when the clock was stopped
+    session: { type: Schema.Types.ObjectId, ref: 'StallSession', default: null, index: true },
   },
   { timestamps: true },
 );

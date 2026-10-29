@@ -16,6 +16,8 @@ import { ordersRouter } from './routes/orders.js';
 import { productsRouter } from './routes/products.js';
 import { purchasesRouter } from './routes/purchases.js';
 import { reportsRouter } from './routes/reports.js';
+import { sessionsRouter } from './routes/sessions.js';
+import { stockRouter, usageRouter } from './routes/usage.js';
 
 // The built React app, if present, is served from the same origin as the API
 const clientDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../client/dist');
@@ -50,6 +52,9 @@ export function createApp() {
   app.use('/api/orders', requireAuth, ordersRouter);
   app.use('/api/purchases', requireAuth, purchasesRouter);
   app.use('/api/reports', requireAuth, reportsRouter);
+  app.use('/api/sessions', requireAuth, sessionsRouter);
+  app.use('/api/usage', requireAuth, usageRouter);
+  app.use('/api/stock', requireAuth, stockRouter);
   app.use('/api', notFound);
 
   if (existsSync(clientDist)) {

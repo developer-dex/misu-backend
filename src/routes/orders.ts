@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Order, PAYMENT_METHODS } from '../models/Order.js';
 import { Product } from '../models/Product.js';
+import { StallSession } from '../models/StallSession.js';
 import { buildDayView } from '../services/dayView.js';
 import { HttpError, dayString, idParam, money, objectId, parse } from '../utils/http.js';
 
@@ -33,8 +34,12 @@ ordersRouter.post('/', async (req, res) => {
   const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
   if (body.discount > subtotal) throw new HttpError(400, 'Discount is more than the order total');
 
+  // A sale made while the clock runs belongs to that session (only when it is for the same day)
+  const open = await StallSession.findOne({ end: null, day: body.day }, { _id: 1 }).lean();
+
   const order = await Order.create({
     day: body.day,
+    session: open?._id ?? null,
     items,
     subtotal,
     discount: body.discount,

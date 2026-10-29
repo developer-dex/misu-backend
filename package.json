@@ -12,6 +12,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "seed": "tsx src/scripts/seed.ts",
+    "seed:prod": "node dist/scripts/seed.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "license": "UNLICENSED",
