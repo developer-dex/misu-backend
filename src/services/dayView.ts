@@ -15,6 +15,7 @@ export function orderJson(o: {
   payment: string;
   note?: string | null;
   session?: unknown;
+  source?: string | null;
 }) {
   return {
     id: String(o._id),
@@ -26,6 +27,7 @@ export function orderJson(o: {
     payment: o.payment,
     note: o.note ?? '',
     sessionId: o.session ? String(o.session) : null,
+    source: o.source === 'summary' ? 'summary' : 'live',
   };
 }
 

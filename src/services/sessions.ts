@@ -10,6 +10,7 @@ type SessionDoc = {
   end?: Date | null;
   startedBy?: string | null;
   stoppedBy?: string | null;
+  source?: string | null;
 };
 
 type OrderDoc = Parameters<typeof summarise>[0][number];
@@ -36,6 +37,7 @@ export function sessionJson(s: SessionDoc, orders: OrderDoc[], number: number) {
     durationMs,
     startedBy: s.startedBy ?? null,
     stoppedBy: s.stoppedBy ?? null,
+    source: s.source === 'summary' ? 'summary' : 'live',
     orderCount: totals.orderCount,
     units: totals.units,
     unitsByProduct: Object.fromEntries(totals.unitsByProduct),

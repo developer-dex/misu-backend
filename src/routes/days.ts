@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { DayLog } from '../models/DayLog.js';
 import { Product } from '../models/Product.js';
 import { StallSession } from '../models/StallSession.js';
+import { buildDayEntry, clearDayEntry, saveDayEntry } from '../services/dayEntry.js';
 import { buildDayView } from '../services/dayView.js';
 import { todayInBusinessZone } from '../utils/dates.js';
-import { HttpError, dayString, objectId, parse } from '../utils/http.js';
+import { HttpError, dayString, money, objectId, parse } from '../utils/http.js';
 
 export const daysRouter = Router();
 
@@ -65,4 +66,44 @@ daysRouter.put('/:day/prepared', async (req, res) => {
     { upsert: true },
   );
   res.json(await buildDayView(day));
+});
+
+/* ---------- Past days: a whole day's sales typed in at once ---------- */
+
+const lines = z
+  .array(z.object({ productId: objectId, qty: z.coerce.number().int().min(0).max(10_000) }))
+  .max(50);
+
+const sale = z.object({ items: lines.default([]), discount: money.default(0) });
+
+const dayEntryInput = z
+  .object({
+    opened: z.coerce.date().nullable().default(null),
+    closed: z.coerce.date().nullable().default(null),
+    cash: sale.default({ items: [], discount: 0 }),
+    online: sale.default({ items: [], discount: 0 }),
+    prepared: lines.nullable().default(null),
+  })
+  .refine((b) => (b.opened === null) === (b.closed === null), 'Enter both the opening and the closing time, or neither')
+  .refine((b) => !b.opened || !b.closed || b.closed > b.opened, 'Closing time must be after opening time')
+  .refine((b) => !b.opened || !b.closed || b.closed.getTime() - b.opened.getTime() <= 24 * 3_600_000, 'The stall can be open for 24 hours at most');
+
+function pastDayParam(value: unknown): string {
+  const day = dayParam(value);
+  if (day > todayInBusinessZone()) throw new HttpError(400, 'That day has not happened yet');
+  return day;
+}
+
+daysRouter.get('/:day/entry', async (req, res) => {
+  res.json(await buildDayEntry(dayParam(req.params.day)));
+});
+
+/** Saves (or replaces) the typed-in totals for a day. */
+daysRouter.put('/:day/entry', async (req, res) => {
+  const day = pastDayParam(req.params.day);
+  res.json(await saveDayEntry(day, parse(dayEntryInput, req.body), req.user?.username ?? null));
+});
+
+daysRouter.delete('/:day/entry', async (req, res) => {
+  res.json(await clearDayEntry(dayParam(req.params.day)));
 });

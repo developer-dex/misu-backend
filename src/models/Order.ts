@@ -3,6 +3,9 @@ import { Schema, model } from 'mongoose';
 export const PAYMENT_METHODS = ['cash', 'online'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
+// 'live' = rung up on the Sell screen; 'summary' = a day's totals entered afterwards on Past days
+export const ENTRY_SOURCES = ['live', 'summary'] as const;
+
 /**
  * One sale at the stall. Name and price are copied from the product when the
  * order is made, so changing a price later does not rewrite past sales.
@@ -28,6 +31,7 @@ const orderSchema = new Schema(
     note: { type: String, trim: true, maxlength: 200 },
     // The clock session running when the sale was made; null when the clock was stopped
     session: { type: Schema.Types.ObjectId, ref: 'StallSession', default: null, index: true },
+    source: { type: String, enum: ENTRY_SOURCES, default: 'live' },
   },
   { timestamps: true },
 );

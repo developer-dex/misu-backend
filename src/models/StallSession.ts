@@ -1,4 +1,5 @@
 import { Schema, model } from 'mongoose';
+import { ENTRY_SOURCES } from './Order.js';
 
 /**
  * One run of the stall clock, from Start to Stop. A day can have several
@@ -11,6 +12,8 @@ const stallSessionSchema = new Schema(
     end: { type: Date, default: null },
     startedBy: { type: String, default: null },
     stoppedBy: { type: String, default: null },
+    // 'summary' = opening hours typed in on Past days rather than timed with the clock
+    source: { type: String, enum: ENTRY_SOURCES, default: 'live' },
   },
   { timestamps: true },
 );

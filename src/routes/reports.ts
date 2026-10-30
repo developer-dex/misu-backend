@@ -60,6 +60,8 @@ reportsRouter.get('/', async (req, res) => {
       usedCost: usedByDay.get(day) ?? 0,
       sessionCount: sessionsByDay.get(day)?.length ?? 0,
       workedMs: totalMs(sessionsByDay.get(day) ?? []),
+      // Sales typed in afterwards on Past days, rather than rung up order by order
+      entered: (ordersByDay.get(day) ?? []).some((o) => o.source === 'summary'),
     };
   });
 
