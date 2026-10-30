@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { config } from './config.js';
 import { createApp } from './app.js';
+import { startKeepAlive } from './keepAlive.js';
 import { migrateShiftsToSessions } from './migrations.js';
 import { User } from './models/User.js';
 import { seedDefaults } from './seed.js';
@@ -17,6 +18,8 @@ async function main() {
     console.log(`MISU API listening on http://localhost:${config.port}`);
     if (users === 0) console.warn('No login account yet. Run `npm run seed` to create one.');
   });
+
+  if (config.keepAliveUrl) startKeepAlive(config.keepAliveUrl);
 
   const shutdown = async () => {
     server.close();

@@ -23,4 +23,6 @@ export const config = {
   authSecret,
   timeZone: process.env.APP_TIMEZONE?.trim() || 'Asia/Kolkata',
   isProduction: process.env.NODE_ENV === 'production',
+  // Render sets RENDER_EXTERNAL_URL itself; KEEP_ALIVE_URL overrides it, and an empty value turns pinging off
+  keepAliveUrl: (process.env.KEEP_ALIVE_URL ?? process.env.RENDER_EXTERNAL_URL ?? '').trim(),
 };
