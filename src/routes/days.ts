@@ -83,6 +83,10 @@ const dayEntryInput = z
     cash: sale.default({ items: [], discount: 0 }),
     online: sale.default({ items: [], discount: 0 }),
     prepared: lines.nullable().default(null),
+    prices: z
+      .array(z.object({ productId: objectId, price: money.refine((n) => n > 0, 'Price must be more than ₹0') }))
+      .max(50)
+      .default([]),
   })
   .refine((b) => (b.opened === null) === (b.closed === null), 'Enter both the opening and the closing time, or neither')
   .refine((b) => !b.opened || !b.closed || b.closed > b.opened, 'Closing time must be after opening time')

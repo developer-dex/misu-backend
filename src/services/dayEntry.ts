@@ -26,6 +26,8 @@ export type DayEntryInput = {
   online: Sale;
   // null leaves the day's "made" counts as they are
   prepared: Line[] | null;
+  // The price each flavour sold at that day, when it differs from today's menu
+  prices: { productId: string; price: number }[];
 };
 
 export async function buildDayEntry(day: string) {
@@ -71,6 +73,7 @@ export async function buildDayEntry(day: string) {
         productId: String(p._id),
         name: p.name,
         price: enteredPrice.get(String(p._id)) ?? p.price,
+        menuPrice: p.price,
         active: p.active,
       })),
     // What the Sell screen already has for this day; the entry is added on top
@@ -91,6 +94,8 @@ export async function saveDayEntry(day: string, input: DayEntryInput, username: 
   if (wanted.some((id) => !byId.has(id)) || (input.prepared ?? []).some((p) => !byId.has(p.productId))) {
     throw new HttpError(400, 'Unknown flavour');
   }
+  // Price typed for the day, else the price it was saved at before, else today's menu price
+  const typedPrice = new Map(input.prices.map((p) => [p.productId, p.price]));
   const enteredPrice = new Map(previous.flatMap((o) => o.items.map((i) => [String(i.product), i.unitPrice] as const)));
 
   // Work out both orders before writing anything, so a bad discount leaves the day untouched
@@ -100,7 +105,7 @@ export async function saveDayEntry(day: string, input: DayEntryInput, username: 
     for (const i of lines(sale)) qty.set(i.productId, (qty.get(i.productId) ?? 0) + i.qty);
     const items = [...qty].map(([id, n]) => {
       const p = byId.get(id)!;
-      return { product: p._id, name: p.name, unitPrice: enteredPrice.get(id) ?? p.price, qty: n };
+      return { product: p._id, name: p.name, unitPrice: typedPrice.get(id) ?? enteredPrice.get(id) ?? p.price, qty: n };
     });
     const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
     if (sale.discount > subtotal) {
