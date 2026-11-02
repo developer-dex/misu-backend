@@ -39,7 +39,8 @@ export function createApp() {
     }),
   );
   app.use(compression());
-  if (config.clientOrigins.length) app.use('/api', cors({ origin: config.clientOrigins }));
+  // maxAge lets the browser skip the extra "may I?" request before each call for 2 hours
+  if (config.clientOrigins.length) app.use('/api', cors({ origin: config.clientOrigins, maxAge: 7200 }));
   app.use(express.json({ limit: '50kb' }));
 
   app.get('/api/health', (_req, res) => {

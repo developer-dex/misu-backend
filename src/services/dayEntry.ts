@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { DayLog } from '../models/DayLog.js';
 import { Order, PAYMENT_METHODS, type PaymentMethod } from '../models/Order.js';
 import { Product } from '../models/Product.js';
@@ -117,22 +118,21 @@ export async function saveDayEntry(day: string, input: DayEntryInput, username: 
 
   await Promise.all([Order.deleteMany({ day, ...SUMMARY }), StallSession.deleteMany({ day, ...SUMMARY })]);
 
-  const session =
-    input.opened && input.closed
-      ? await StallSession.create({ day, start: input.opened, end: input.closed, startedBy: username, stoppedBy: username, ...SUMMARY })
-      : null;
-
-  await Order.insertMany(
-    orders.map((o) => ({ day, ...o, session: session?._id ?? null, note: 'Day total', ...SUMMARY })),
-  );
-
-  if (input.prepared) {
-    await DayLog.updateOne(
-      { day },
-      { $set: { prepared: input.prepared.filter((p) => p.qty > 0).map((p) => ({ product: p.productId, qty: p.qty })) } },
-      { upsert: true },
-    );
-  }
+  // The session's id is made here so it and the orders that point to it are written together
+  const sessionId = input.opened && input.closed ? new Types.ObjectId() : null;
+  await Promise.all([
+    sessionId
+      ? StallSession.create({ _id: sessionId, day, start: input.opened, end: input.closed, startedBy: username, stoppedBy: username, ...SUMMARY })
+      : null,
+    Order.insertMany(orders.map((o) => ({ day, ...o, session: sessionId, note: 'Day total', ...SUMMARY }))),
+    input.prepared
+      ? DayLog.updateOne(
+          { day },
+          { $set: { prepared: input.prepared.filter((p) => p.qty > 0).map((p) => ({ product: p.productId, qty: p.qty })) } },
+          { upsert: true },
+        )
+      : null,
+  ]);
 
   return buildDayEntry(day);
 }

@@ -27,15 +27,16 @@ ordersRouter.post('/', async (req, res) => {
   const qtyById = new Map<string, number>();
   for (const i of body.items) qtyById.set(i.productId, (qtyById.get(i.productId) ?? 0) + i.qty);
 
-  const products = await Product.find({ _id: { $in: [...qtyById.keys()] } }).lean();
+  // A sale made while the clock runs belongs to that session (only when it is for the same day)
+  const [products, open] = await Promise.all([
+    Product.find({ _id: { $in: [...qtyById.keys()] } }).lean(),
+    StallSession.findOne({ end: null, day: body.day }, { _id: 1 }).lean(),
+  ]);
   if (products.length !== qtyById.size) throw new HttpError(400, 'Unknown flavour');
 
   const items = products.map((p) => ({ product: p._id, name: p.name, unitPrice: p.price, qty: qtyById.get(String(p._id))! }));
   const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
   if (body.discount > subtotal) throw new HttpError(400, 'Discount is more than the order total');
-
-  // A sale made while the clock runs belongs to that session (only when it is for the same day)
-  const open = await StallSession.findOne({ end: null, day: body.day }, { _id: 1 }).lean();
 
   const order = await Order.create({
     day: body.day,
