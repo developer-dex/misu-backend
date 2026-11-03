@@ -14,6 +14,32 @@ import { HttpError, dayString, parse } from '../utils/http.js';
 export const reportsRouter = Router();
 
 /**
+ * Everything so far, whatever the dates: all money taken, all money spent on
+ * purchases, and the difference. Purchases rather than ingredients used, so
+ * the profit is the plain cash picture: what came in minus what went out.
+ */
+reportsRouter.get('/all-time', async (_req, res) => {
+  const [sales, purchases] = await Promise.all([
+    Order.aggregate<{ sold: number; units: number; orderCount: number; first: string }>([
+      { $group: { _id: null, sold: { $sum: '$total' }, units: { $sum: { $sum: '$items.qty' } }, orderCount: { $sum: 1 }, first: { $min: '$day' } } },
+    ]),
+    Purchase.aggregate<{ spent: number; first: string }>([{ $group: { _id: null, spent: { $sum: '$amount' }, first: { $min: '$date' } } }]),
+  ]);
+  const sold = Math.round((sales[0]?.sold ?? 0) * 100) / 100;
+  const spent = Math.round((purchases[0]?.spent ?? 0) * 100) / 100;
+  const firsts = [sales[0]?.first, purchases[0]?.first].filter((d): d is string => Boolean(d));
+
+  res.json({
+    since: firsts.length ? firsts.sort()[0] : null,
+    sold,
+    spent,
+    profit: Math.round((sold - spent) * 100) / 100,
+    units: sales[0]?.units ?? 0,
+    orderCount: sales[0]?.orderCount ?? 0,
+  });
+});
+
+/**
  * Sales, spend and stall hours between two dates (both included).
  * Profit here is takings minus purchases in the same dates, so it swings on
  * the days a big stock-up happens; the longer the range, the fairer it is.
