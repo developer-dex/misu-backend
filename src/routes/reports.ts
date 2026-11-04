@@ -20,20 +20,34 @@ export const reportsRouter = Router();
  */
 reportsRouter.get('/all-time', async (_req, res) => {
   const [sales, purchases] = await Promise.all([
-    Order.aggregate<{ sold: number; units: number; orderCount: number; first: string }>([
-      { $group: { _id: null, sold: { $sum: '$total' }, units: { $sum: { $sum: '$items.qty' } }, orderCount: { $sum: 1 }, first: { $min: '$day' } } },
+    Order.aggregate<{ sold: number; cash: number; online: number; units: number; orderCount: number; first: string }>([
+      {
+        $group: {
+          _id: null,
+          sold: { $sum: '$total' },
+          // Split as everywhere else: cash is cash, anything else counts as online
+          cash: { $sum: { $cond: [{ $eq: ['$payment', 'cash'] }, '$total', 0] } },
+          online: { $sum: { $cond: [{ $eq: ['$payment', 'cash'] }, 0, '$total'] } },
+          units: { $sum: { $sum: '$items.qty' } },
+          orderCount: { $sum: 1 },
+          first: { $min: '$day' },
+        },
+      },
     ]),
     Purchase.aggregate<{ spent: number; first: string }>([{ $group: { _id: null, spent: { $sum: '$amount' }, first: { $min: '$date' } } }]),
   ]);
-  const sold = Math.round((sales[0]?.sold ?? 0) * 100) / 100;
-  const spent = Math.round((purchases[0]?.spent ?? 0) * 100) / 100;
+  const round = (n: number | undefined) => Math.round((n ?? 0) * 100) / 100;
+  const sold = round(sales[0]?.sold);
+  const spent = round(purchases[0]?.spent);
   const firsts = [sales[0]?.first, purchases[0]?.first].filter((d): d is string => Boolean(d));
 
   res.json({
     since: firsts.length ? firsts.sort()[0] : null,
     sold,
+    cash: round(sales[0]?.cash),
+    online: round(sales[0]?.online),
     spent,
-    profit: Math.round((sold - spent) * 100) / 100,
+    profit: round(sold - spent),
     units: sales[0]?.units ?? 0,
     orderCount: sales[0]?.orderCount ?? 0,
   });
