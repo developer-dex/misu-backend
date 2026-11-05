@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Order } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { HttpError, idParam, money, parse } from '../utils/http.js';
 
@@ -42,5 +43,13 @@ productsRouter.patch('/:id', async (req, res) => {
   );
   const product = await Product.findByIdAndUpdate(idParam(req), body, { new: true, runValidators: true });
   if (!product) throw new HttpError(404, 'Flavour not found');
+  // A new name is a correction, so past orders show it too; their prices stay as sold
+  if (body.name) {
+    await Order.updateMany(
+      { 'items.product': product._id },
+      { $set: { 'items.$[i].name': product.name } },
+      { arrayFilters: [{ 'i.product': product._id }] },
+    );
+  }
   res.json(toJson(product));
 });
