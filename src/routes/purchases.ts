@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { PAYMENT_METHODS } from '../models/Order.js';
 import { Purchase } from '../models/Purchase.js';
 import { HttpError, dayString, idParam, money, parse } from '../utils/http.js';
 
 export const purchasesRouter = Router();
 
-const toJson = (p: { _id: unknown; date: string; item: string; quantity?: number | null; unit?: string | null; amount: number; note?: string | null; createdAt?: Date }) => ({
+const toJson = (p: { _id: unknown; date: string; item: string; quantity?: number | null; unit?: string | null; amount: number; note?: string | null; payment?: string | null; createdAt?: Date }) => ({
   id: String(p._id),
   date: p.date,
   item: p.item,
@@ -13,6 +14,7 @@ const toJson = (p: { _id: unknown; date: string; item: string; quantity?: number
   unit: p.unit ?? '',
   amount: p.amount,
   note: p.note ?? '',
+  payment: p.payment ?? null,
   createdAt: p.createdAt,
 });
 
@@ -23,6 +25,7 @@ const fields = z.object({
   unit: z.string().trim().max(20).optional(),
   amount: money.refine((n) => n > 0, 'Enter the amount paid'),
   note: z.string().trim().max(200).optional(),
+  payment: z.enum(PAYMENT_METHODS, { message: 'Choose cash or online' }),
 });
 
 purchasesRouter.get('/', async (req, res) => {
