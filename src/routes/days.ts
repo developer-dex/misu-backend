@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { DayLog } from '../models/DayLog.js';
+import { DayLog, clearDayOff } from '../models/DayLog.js';
+import { Order } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { StallSession } from '../models/StallSession.js';
 import { buildDayEntry, clearDayEntry, saveDayEntry } from '../services/dayEntry.js';
@@ -36,7 +37,20 @@ daysRouter.post('/:day/session/start', async (req, res) => {
   if (open) {
     throw new HttpError(409, open.day === day ? 'The clock is already running' : `The clock for ${open.day} is still running. Stop it first.`);
   }
-  await StallSession.create({ day, start: new Date(), startedBy: req.user?.username ?? null });
+  await Promise.all([StallSession.create({ day, start: new Date(), startedBy: req.user?.username ?? null }), clearDayOff(day)]);
+  res.json(await buildDayView(day));
+});
+
+/** Marks a day as one the stall stayed closed, or takes that back. */
+daysRouter.put('/:day/off', async (req, res) => {
+  const day = dayParam(req.params.day);
+  const { off } = parse(z.object({ off: z.boolean() }), req.body);
+  if (off) {
+    const [orders, sessions] = await Promise.all([Order.countDocuments({ day }), StallSession.countDocuments({ day })]);
+    if (orders > 0) throw new HttpError(409, 'This day has sales, so it cannot be a day off');
+    if (sessions > 0) throw new HttpError(409, 'The stall clock ran this day, so it cannot be a day off');
+  }
+  await DayLog.updateOne({ day }, { $set: { off } }, { upsert: true });
   res.json(await buildDayView(day));
 });
 

@@ -59,6 +59,7 @@ export async function buildDayView(day: string) {
 
   return {
     day,
+    off: log?.off ?? false,
     serverTime: new Date().toISOString(),
     sessions: sessionList,
     currentSession: sessionList.find((s) => s.running) ?? null,

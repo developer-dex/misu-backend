@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { DayLog } from '../models/DayLog.js';
+import { DayLog, clearDayOff } from '../models/DayLog.js';
 import { Order, PAYMENT_METHODS, type PaymentMethod } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { StallSession } from '../models/StallSession.js';
@@ -63,6 +63,7 @@ export async function buildDayEntry(day: string) {
   return {
     day,
     exists: orders.length > 0 || session !== null,
+    off: log?.off ?? false,
     opened: session?.start ?? null,
     closed: session?.end ?? null,
     cash: sales.cash,
@@ -132,6 +133,7 @@ export async function saveDayEntry(day: string, input: DayEntryInput, username: 
           { upsert: true },
         )
       : null,
+    clearDayOff(day),
   ]);
 
   return buildDayEntry(day);

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { clearDayOff } from '../models/DayLog.js';
 import { Order, PAYMENT_METHODS } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { StallSession } from '../models/StallSession.js';
@@ -38,16 +39,19 @@ ordersRouter.post('/', async (req, res) => {
   const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
   if (body.discount > subtotal) throw new HttpError(400, 'Discount is more than the order total');
 
-  const order = await Order.create({
-    day: body.day,
-    session: open?._id ?? null,
-    items,
-    subtotal,
-    discount: body.discount,
-    total: Math.round((subtotal - body.discount) * 100) / 100,
-    payment: body.payment,
-    note: body.note,
-  });
+  const [order] = await Promise.all([
+    Order.create({
+      day: body.day,
+      session: open?._id ?? null,
+      items,
+      subtotal,
+      discount: body.discount,
+      total: Math.round((subtotal - body.discount) * 100) / 100,
+      payment: body.payment,
+      note: body.note,
+    }),
+    clearDayOff(body.day),
+  ]);
 
   res.status(201).json({ orderId: String(order._id), day: await buildDayView(body.day) });
 });

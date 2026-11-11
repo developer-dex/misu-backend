@@ -13,8 +13,15 @@ const dayLogSchema = new Schema(
   {
     day: { type: String, required: true, unique: true },
     prepared: { type: [preparedSchema], default: [] },
+    // The stall stayed closed this day
+    off: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 
 export const DayLog = model('DayLog', dayLogSchema);
+
+/** Selling or opening on a day marked off means it was not off after all. */
+export async function clearDayOff(day: string): Promise<void> {
+  await DayLog.updateOne({ day, off: true }, { $set: { off: false } });
+}

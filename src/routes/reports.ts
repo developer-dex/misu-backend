@@ -102,6 +102,7 @@ reportsRouter.get('/', async (req, res) => {
       workedMs: totalMs(sessionsByDay.get(day) ?? []),
       // Sales typed in afterwards on Past days, rather than rung up order by order
       entered: (ordersByDay.get(day) ?? []).some((o) => o.source === 'summary'),
+      off: log?.off ?? false,
     };
   });
 
@@ -145,6 +146,7 @@ reportsRouter.get('/', async (req, res) => {
       profit: all.net - (usage.length > 0 ? usedCost : spend),
       workedMs: totalWorked,
       stallDays: days.filter((d) => d.workedMs > 0 || d.orderCount > 0).length,
+      daysOff: days.filter((d) => d.off).length,
       // Only days with the clock used count, so a day without timing does not inflate the rate
       unitsPerHour: totalWorked >= MIN_RATE_MS ? unitsWhileClocked / (totalWorked / 3_600_000) : null,
     },
