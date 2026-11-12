@@ -59,6 +59,10 @@ export async function buildDayEntry(day: string) {
   const prepared = (log?.prepared ?? []).map((p) => ({ productId: String(p.product), qty: p.qty }));
   const used = new Set([...enteredPrice.keys(), ...prepared.map((p) => p.productId)]);
   const live = summarise(liveOrders);
+  // Everything sold that day, whether rung up on Sell or typed in here
+  const all = summarise([...liveOrders, ...orders]);
+  const nameById = new Map(products.map((p) => [String(p._id), p.name]));
+  for (const o of [...liveOrders, ...orders]) for (const i of o.items) if (!nameById.has(String(i.product))) nameById.set(String(i.product), i.name);
 
   return {
     day,
@@ -79,7 +83,18 @@ export async function buildDayEntry(day: string) {
         active: p.active,
       })),
     // What the Sell screen already has for this day; the entry is added on top
-    live: { orderCount: live.orderCount, units: live.units, net: live.net, sessionCount: liveSessions },
+    live: { orderCount: live.orderCount, units: live.units, net: live.net, cash: live.cash, online: live.online, sessionCount: liveSessions },
+    // The day as a whole: Sell orders and the typed-in total together
+    sold: {
+      orderCount: all.orderCount,
+      units: all.units,
+      gross: all.gross,
+      discount: all.discount,
+      net: all.net,
+      cash: all.cash,
+      online: all.online,
+      byProduct: [...all.unitsByProduct].map(([productId, units]) => ({ productId, name: nameById.get(productId) ?? 'Flavour', units })),
+    },
   };
 }
 
