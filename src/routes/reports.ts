@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { DayLog } from '../models/DayLog.js';
-import { Order } from '../models/Order.js';
+import { Order, PAYMENT_METHODS } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { Purchase } from '../models/Purchase.js';
 import { StallSession } from '../models/StallSession.js';
@@ -21,6 +21,8 @@ export const reportsRouter = Router();
 reportsRouter.get('/all-time', async (_req, res) => {
   const [sales, purchases] = await Promise.all([
     Order.aggregate<{ sold: number; cash: number; online: number; units: number; orderCount: number; first: string }>([
+      // Orders on hold are not paid yet
+      { $match: { payment: { $in: [...PAYMENT_METHODS] } } },
       {
         $group: {
           _id: null,
@@ -121,6 +123,7 @@ reportsRouter.get('/', async (req, res) => {
 
   const revenueByProduct = new Map<string, number>();
   for (const o of orders) {
+    if (!o.payment) continue; // on hold
     for (const i of o.items) {
       const id = String(i.product);
       revenueByProduct.set(id, (revenueByProduct.get(id) ?? 0) + i.unitPrice * i.qty);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { clearDayOff } from '../models/DayLog.js';
-import { Order, PAYMENT_METHODS } from '../models/Order.js';
+import { ON_HOLD, Order, PAYMENT_METHODS } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { StallSession } from '../models/StallSession.js';
 import { buildDayView } from '../services/dayView.js';
@@ -16,13 +16,27 @@ const orderInput = z.object({
     .min(1, 'Pick at least one tiramisu')
     .max(20),
   discount: money.default(0),
-  payment: z.enum(PAYMENT_METHODS, { message: 'Choose cash or online' }),
+  // 'hold': the customer pays later, when they collect it
+  payment: z.enum([...PAYMENT_METHODS, 'hold'], { message: 'Choose cash, online or on hold' }),
+  customer: z
+    .object({
+      name: z.string().trim().max(60),
+      phone: z
+        .string()
+        .trim()
+        .max(20)
+        .regex(/^[\d+\-\s()]*$/, 'Phone number can only have digits')
+        .default(''),
+    })
+    .optional(),
   note: z.string().trim().max(200).optional(),
 });
 
 /** Records a sale and returns the updated day. */
 ordersRouter.post('/', async (req, res) => {
   const body = parse(orderInput, req.body);
+  const onHold = body.payment === 'hold';
+  if (onHold && !body.customer?.name) throw new HttpError(400, 'Enter the customer name for an order on hold');
 
   // Same flavour picked twice becomes one line
   const qtyById = new Map<string, number>();
@@ -47,7 +61,9 @@ ordersRouter.post('/', async (req, res) => {
       subtotal,
       discount: body.discount,
       total: Math.round((subtotal - body.discount) * 100) / 100,
-      payment: body.payment,
+      payment: onHold ? null : body.payment,
+      customer: body.customer?.name ? body.customer : null,
+      paidAt: onHold ? null : new Date(),
       note: body.note,
     }),
     clearDayOff(body.day),
@@ -56,9 +72,12 @@ ordersRouter.post('/', async (req, res) => {
   res.status(201).json({ orderId: String(order._id), day: await buildDayView(body.day) });
 });
 
+/** Sets how an order was paid; paying an order on hold takes it off hold. */
 ordersRouter.patch('/:id', async (req, res) => {
-  const body = parse(z.object({ payment: z.enum(PAYMENT_METHODS) }), req.body);
-  const order = await Order.findByIdAndUpdate(idParam(req), body, { new: true });
+  const { payment } = parse(z.object({ payment: z.enum(PAYMENT_METHODS, { message: 'Choose cash or online' }) }), req.body);
+  const id = idParam(req);
+  const wasHeld = await Order.exists({ _id: id, ...ON_HOLD });
+  const order = await Order.findByIdAndUpdate(id, { payment, ...(wasHeld ? { paidAt: new Date() } : {}) }, { new: true });
   if (!order) throw new HttpError(404, 'Order not found');
   res.json({ day: await buildDayView(order.day) });
 });

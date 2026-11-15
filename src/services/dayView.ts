@@ -1,5 +1,5 @@
 import { DayLog } from '../models/DayLog.js';
-import { Order } from '../models/Order.js';
+import { ON_HOLD, Order } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { StallSession } from '../models/StallSession.js';
 import { ordersBySession, sessionJson, totalMs } from './sessions.js';
@@ -12,10 +12,13 @@ export function orderJson(o: {
   subtotal: number;
   discount: number;
   total: number;
-  payment: string;
+  payment?: string | null;
   note?: string | null;
   session?: unknown;
   source?: string | null;
+  day?: string;
+  customer?: { name?: string | null; phone?: string | null } | null;
+  paidAt?: Date | null;
 }) {
   return {
     id: String(o._id),
@@ -24,7 +27,11 @@ export function orderJson(o: {
     subtotal: o.subtotal,
     discount: o.discount,
     total: o.total,
-    payment: o.payment,
+    // null while the order is on hold
+    payment: o.payment ?? null,
+    day: o.day,
+    customer: o.customer?.name ? { name: o.customer.name, phone: o.customer.phone ?? '' } : null,
+    paidAt: o.paidAt ?? null,
     note: o.note ?? '',
     sessionId: o.session ? String(o.session) : null,
     source: o.source === 'summary' ? 'summary' : 'live',
@@ -33,11 +40,13 @@ export function orderJson(o: {
 
 /** Everything the Sell screen needs for one day. */
 export async function buildDayView(day: string) {
-  const [products, log, orders, sessions] = await Promise.all([
+  const [products, log, orders, sessions, held] = await Promise.all([
     Product.find().sort({ sortOrder: 1, createdAt: 1 }).lean(),
     DayLog.findOne({ day }).lean(),
     Order.find({ day }).sort({ createdAt: -1 }).lean(),
     StallSession.find({ day }).sort({ start: 1 }).lean(),
+    // Every order still waiting to be paid for, from any day, so it can be settled from here
+    Order.find(ON_HOLD).sort({ createdAt: 1 }).lean(),
   ]);
 
   const prepared = new Map((log?.prepared ?? []).map((p) => [String(p.product), p.qty]));
@@ -46,13 +55,15 @@ export async function buildDayView(day: string) {
   const sessionList = sessions.map((s, i) => sessionJson(s, bySession.get(String(s._id)) ?? [], i + 1));
 
   const byProduct = products
-    .filter((p) => p.active || totals.unitsByProduct.has(String(p._id)) || prepared.has(String(p._id)))
+    .filter((p) => p.active || totals.unitsByProduct.has(String(p._id)) || totals.heldByProduct.has(String(p._id)) || prepared.has(String(p._id)))
     .map((p) => {
       const id = String(p._id);
       return {
         productId: id,
         name: p.name,
         sold: totals.unitsByProduct.get(id) ?? 0,
+        // Set aside for on-hold orders: not sold yet, but no longer on the tray
+        held: totals.heldByProduct.get(id) ?? 0,
         prepared: prepared.has(id) ? prepared.get(id)! : null,
       };
     });
@@ -74,7 +85,10 @@ export async function buildDayView(day: string) {
       net: totals.net,
       cash: totals.cash,
       online: totals.online,
+      heldCount: totals.heldCount,
+      heldTotal: totals.heldTotal,
     },
     orders: orders.map(orderJson),
+    held: held.map(orderJson),
   };
 }
