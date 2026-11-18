@@ -121,6 +121,21 @@ reportsRouter.get('/', async (req, res) => {
   const spendByItem = new Map<string, number>();
   for (const p of purchases) spendByItem.set(p.item, (spendByItem.get(p.item) ?? 0) + p.amount);
 
+  // Money in and out, split by how it was paid. Purchases saved before cash or
+  // online was asked have no payment, so they are kept apart as unmarked.
+  const purchasesBy = (payment: string | null) => purchases.filter((p) => (p.payment ?? null) === payment);
+  const ordersBy = (payment: string) => orders.filter((o) => o.payment === payment).length;
+  const byPayment = {
+    cash: { sold: all.cash, orders: ordersBy('cash'), spent: 0, purchases: 0 },
+    online: { sold: all.online, orders: ordersBy('online'), spent: 0, purchases: 0 },
+    unmarked: { spent: 0, purchases: 0 },
+  };
+  for (const [key, payment] of [['cash', 'cash'], ['online', 'online'], ['unmarked', null]] as const) {
+    const list = purchasesBy(payment);
+    byPayment[key].spent = list.reduce((sum, p) => sum + p.amount, 0);
+    byPayment[key].purchases = list.length;
+  }
+
   const revenueByProduct = new Map<string, number>();
   for (const o of orders) {
     if (!o.payment) continue; // on hold
@@ -161,6 +176,7 @@ reportsRouter.get('/', async (req, res) => {
         units: all.unitsByProduct.get(String(p._id)) ?? 0,
         gross: revenueByProduct.get(String(p._id)) ?? 0,
       })),
+    byPayment,
     spendByItem: [...spendByItem.entries()]
       .map(([item, amount]) => ({ item, amount }))
       .sort((a, b) => b.amount - a.amount),
