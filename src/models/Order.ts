@@ -41,11 +41,15 @@ const orderSchema = new Schema(
     // The clock session running when the sale was made; null when the clock was stopped
     session: { type: Schema.Types.ObjectId, ref: 'StallSession', default: null, index: true },
     source: { type: String, enum: ENTRY_SOURCES, default: 'live' },
+    // Made by the app for each new order, so a save retried after a dropped
+    // connection finds the first copy instead of recording the sale twice
+    clientId: { type: String },
   },
   { timestamps: true },
 );
 
 orderSchema.index({ payment: 1 });
+orderSchema.index({ clientId: 1 }, { unique: true, partialFilterExpression: { clientId: { $type: 'string' } } });
 
 export const Order = model('Order', orderSchema);
 

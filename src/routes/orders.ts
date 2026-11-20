@@ -30,13 +30,25 @@ const orderInput = z.object({
     })
     .optional(),
   note: z.string().trim().max(200).optional(),
+  clientId: z.string().trim().min(8).max(64).optional(),
 });
+
+/** The answer for an order that was already saved: a retried save gets the same reply as the first. */
+async function savedReply(clientId: string | undefined) {
+  if (!clientId) return null;
+  const existing = await Order.findOne({ clientId }, { day: 1 }).lean();
+  return existing ? { orderId: String(existing._id), day: await buildDayView(existing.day) } : null;
+}
 
 /** Records a sale and returns the updated day. */
 ordersRouter.post('/', async (req, res) => {
   const body = parse(orderInput, req.body);
   const onHold = body.payment === 'hold';
   if (onHold && !body.customer?.name) throw new HttpError(400, 'Enter the customer name for an order on hold');
+
+  // Already saved by an earlier try whose answer never reached the phone
+  const again = await savedReply(body.clientId);
+  if (again) return void res.json(again);
 
   // Same flavour picked twice becomes one line
   const qtyById = new Map<string, number>();
@@ -53,21 +65,30 @@ ordersRouter.post('/', async (req, res) => {
   const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
   if (body.discount > subtotal) throw new HttpError(400, 'Discount is more than the order total');
 
-  const [order] = await Promise.all([
-    Order.create({
-      day: body.day,
-      session: open?._id ?? null,
-      items,
-      subtotal,
-      discount: body.discount,
-      total: Math.round((subtotal - body.discount) * 100) / 100,
-      payment: onHold ? null : body.payment,
-      customer: body.customer?.name ? body.customer : null,
-      paidAt: onHold ? null : new Date(),
-      note: body.note,
-    }),
-    clearDayOff(body.day),
-  ]);
+  let order;
+  try {
+    [order] = await Promise.all([
+      Order.create({
+        day: body.day,
+        session: open?._id ?? null,
+        items,
+        subtotal,
+        discount: body.discount,
+        total: Math.round((subtotal - body.discount) * 100) / 100,
+        payment: onHold ? null : body.payment,
+        customer: body.customer?.name ? body.customer : null,
+        paidAt: onHold ? null : new Date(),
+        note: body.note,
+        clientId: body.clientId,
+      }),
+      clearDayOff(body.day),
+    ]);
+  } catch (err) {
+    // Two tries of the same order arrived together: the other one saved it
+    const first = (err as { code?: number }).code === 11000 ? await savedReply(body.clientId) : null;
+    if (first) return void res.json(first);
+    throw err;
+  }
 
   res.status(201).json({ orderId: String(order._id), day: await buildDayView(body.day) });
 });
