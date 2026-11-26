@@ -20,7 +20,7 @@ export const reportsRouter = Router();
  */
 reportsRouter.get('/all-time', async (_req, res) => {
   const [sales, purchases] = await Promise.all([
-    Order.aggregate<{ sold: number; cash: number; online: number; units: number; orderCount: number; first: string }>([
+    Order.aggregate<{ sold: number; cash: number; online: number; discount: number; discountOrders: number; units: number; orderCount: number; first: string }>([
       // Orders on hold are not paid yet
       { $match: { payment: { $in: [...PAYMENT_METHODS] } } },
       {
@@ -30,6 +30,9 @@ reportsRouter.get('/all-time', async (_req, res) => {
           // Split as everywhere else: cash is cash, anything else counts as online
           cash: { $sum: { $cond: [{ $eq: ['$payment', 'cash'] }, '$total', 0] } },
           online: { $sum: { $cond: [{ $eq: ['$payment', 'cash'] }, 0, '$total'] } },
+          // Money knocked off orders, and on how many orders
+          discount: { $sum: { $ifNull: ['$discount', 0] } },
+          discountOrders: { $sum: { $cond: [{ $gt: [{ $ifNull: ['$discount', 0] }, 0] }, 1, 0] } },
           units: { $sum: { $sum: '$items.qty' } },
           orderCount: { $sum: 1 },
           first: { $min: '$day' },
@@ -48,6 +51,8 @@ reportsRouter.get('/all-time', async (_req, res) => {
     sold,
     cash: round(sales[0]?.cash),
     online: round(sales[0]?.online),
+    discount: round(sales[0]?.discount),
+    discountOrders: sales[0]?.discountOrders ?? 0,
     spent,
     profit: round(sold - spent),
     units: sales[0]?.units ?? 0,
